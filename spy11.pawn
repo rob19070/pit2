@@ -1,0 +1,538 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "spy11"
+#define NPCTAG "spy_spy11_tag"
+#define MOBSCRIPT "spy12"
+#define ITEMSCRIPT "pititem"
+
+#define OX 209
+#define OY 228
+#define OM 5
+
+#define LEADER "^spy_team_lead"
+#define JOIN "^spy_team"
+#define ACTIVE "^spy_team_active"
+
+#define ROLENONE 0
+#define ROLEMAGE 1
+#define ROLEWAR 2
+#define ROLEASSISTANT 3
+
+#define TM 4
+#define TX 237
+#define TY 117
+#define DX 279
+#define DY 160
+
+#define KILLS "spy_team_kills"
+#define TIMEOUT "spy_team_to"
+#define TIMEOUTRESET "spy_team_to_r"
+#define RANK_FLAG "spy_rank_"
+#define TOTAL_RUNS "spy_runs_"
+
+#define GHOST 114
+#define GREEN 109
+#define SILVER_DRAGON 113
+#define BENGAL_TIGER 101
+#define DAIJOU 170
+#define SERPENT 172
+
+#define KILLREQ 25
+#define MAX 255
+
+// Forward declarations
+forward public converse(mapid, npcid, sktid, uidmsg);
+forward public countdown(secs);
+forward public timeout();
+forward public mpboost(sktid, amount);
+forward public hpboost(sktid, amount);
+forward public zone_playerdeath(plrid, npcid, x, y, z, map);
+
+GetPermanentID(sktid) {
+    shset(0, "pid");
+    return gsGetFlag(sktid, 0);
+}
+
+applyDeathPenalty(sktid) {
+    new pid = GetPermanentID(sktid);
+    
+    // Get current runs
+    shset(0, TOTAL_RUNS);
+    shappendn(0, pid);
+    new totalRuns = gsGetFlag(0, 0);
+    
+    // Decrease runs by 1 (don't go below 0)
+    new newRuns = totalRuns > 1 ? totalRuns - 1 : 0;
+    
+    // Update runs
+    shset(0, TOTAL_RUNS);
+    shappendn(0, pid);
+    gsSetFlag(0, 0, newRuns);
+    
+    // Send message about lost run
+    shset(0, "Your death has cost you a run! Total Runs: ");
+    shappendn(0, newRuns);
+    gsStatusMessage(sktid, 0);
+}
+
+public zone_playerdeath(plrid, npcid, x, y, z, map) {
+    // Check if player is in the pit area
+    if(isinarea(plrid)) {
+        applyDeathPenalty(plrid);
+    }
+}
+
+anyinarea() {
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(isinarea(i) == 1) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+checkEntryEquipment(sktid) {
+    shset(6, ITEMSCRIPT);
+    
+    // Check Skullblade
+    shset(7, "HasSkullBlade");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "The skull blade whispers ancient battle secrets as you enter...");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Master Mage Set
+    shset(7, "HasMasterMageSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Your master's robe thrums with arcane energy, resonating with your magical weapon!");
+        gsSayMessage(sktid, 0);
+    }
+}
+
+displaySetMessages(sktid) {
+    shset(6, ITEMSCRIPT);
+    
+    // Check Burning Set
+    shset(7, "HasBurningSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "The burning armor resonates with power as you prepare for battle!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Mithril Set
+    shset(7, "HasMithrilSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Your mithril armor gleams with protective enchantments!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Master Set
+    shset(7, "HasMasterSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "The master's equipment pulses with ancient strength!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Holy Set
+    shset(7, "HasHolySet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Divine light cascades around you as your holy armor awakens!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Arctic Set
+    shset(7, "HasArcticSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Your arctic equipment radiates an aura of biting frost!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Blood Set
+    shset(7, "HasBloodSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "The blood armor thirsts for combat, dark energies swirling!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Legend Set
+    shset(7, "HasLegendSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Tales of heroic deeds echo from your legendary equipment!");
+        gsSayMessage(sktid, 0);
+    }
+    
+    // Check Golden Set
+    shset(7, "HasGoldenSet");
+    if(gsCall(6, 7, sktid)) {
+        shset(0, "Fortune smiles upon you as your golden armor shimmers with destiny!");
+        gsSayMessage(sktid, 0);
+    }
+}
+
+giveoptions(mapid, npcid, sktid) {
+    gsConvBegin();
+    shset(0, "Hey there!");
+    gsConvSetMessage(0);
+    
+    // Check special equipment when player enters
+    checkEntryEquipment(sktid);
+    
+    shset(0, "Let me out of here!");
+    gsConvAddOption(1, 0);
+
+    shset(0, "I'll talk to you later.");
+    gsConvAddOption(2, 0);
+    
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+public converse(mapid, npcid, sktid, uidmsg) {
+    shset(0, NPCTAG);
+    gsSetFlag(0, 0, gsTag(mapid, npcid));
+
+    scriptname(sktid);
+
+    switch(uidmsg) {
+        case 0: giveoptions(mapid, npcid, sktid);
+        case 1: exitzone(sktid);
+        case 2: return;
+    }
+}
+
+exitzone(sktid) {
+    if(isinarea(sktid) == 1) {
+        shset(0, JOIN);
+        gsSetFlag(sktid, 0, 0);
+        shset(0, ACTIVE);
+        gsSetFlag(sktid, 0, 0);
+        shset(0, LEADER);
+        gsSetFlag(sktid, 0, 0);
+    
+        gsSetCoords(sktid, OX, OY, 0, OM);
+    }
+}
+
+public countdown(secs) {
+    if(--secs > 0) {
+        shset(0, NPCTAG);
+        new tag = gsGetFlag(0, 0);
+
+        shset(0, "");
+        shappendn(0, secs);
+        shappends(0, " seconds till the monsters arrive!");
+        gsSayMessage(tag, 0);
+
+        shset(0, SCRIPTNAME);
+        shset(1, "countdown");
+        gsTimer(0, 1, 5, secs, 0, 0, 0, 0);
+    }
+    else {
+        // Reset kill counter and timer
+        shset(0, KILLS);
+        gsSetFlag(0, 0, 0);
+        
+        shset(0, TIMEOUT);
+        gsSetFlag(0, 0, 0);
+        
+        shset(0, TIMEOUTRESET);
+        gsSetFlag(0, 0, 0);
+        
+        // Display set messages for all team members
+        new members[MAX];
+        members = getteammembers();
+        for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
+            displaySetMessages(members[i]);
+        }
+        
+        startboosts();
+        spawnmobs();
+        timeout();
+    }
+}
+
+public timeout() {
+    shset(0, TIMEOUT);
+    new to = gsGetFlag(0, 0);
+    
+    shset(0, TIMEOUTRESET);
+    new tr = gsGetFlag(0, 0);
+            
+    if(to == 1) {
+        new members[MAX];
+        members = getteammembers();
+    
+        for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
+            exitzone(members[i]);
+            
+            shset(0, "Your team was too slow, a team needs to kill atleast one monster per minute.");
+            gsStatusMessage(members[i], 0);
+        }
+    }
+    else {
+        if(tr == 0) {
+            shset(0, TIMEOUT);
+            gsSetFlag(0, 0, 1);
+            
+            shset(0, SCRIPTNAME);
+            shset(1, "timeout");
+            
+            gsTimer(0, 1, 550, 0, 0, 0, 0, 0);  // Back to original tick rate
+        }
+        else {
+            shset(0, TIMEOUTRESET);
+            gsSetFlag(0, 0, 0);
+        }
+    }
+}
+
+startboosts() {
+    new members[MAX];
+    members = getteammembers();
+    
+    for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
+        switch(getrole(members[i])) {
+            case ROLEMAGE: {
+                mpboost(members[i], 12);
+                hpboost(members[i], 1);
+            }
+            case ROLEWAR: {
+                mpboost(members[i], 4);
+                hpboost(members[i], 9);
+            }
+            case ROLEASSISTANT: {
+                mpboost(members[i], 6);
+                hpboost(members[i], 6);
+            }
+        }
+        
+        shset(0, "The adrenaline rushes through your body causing a significant regeneration boost!");
+        gsStatusMessage(members[i], 0);
+    }
+}
+
+spawnmobs() {
+    shset(0, NPCTAG);
+    new tag = gsGetFlag(0, 0);
+    
+    // Get run type (advanced or normal)
+    shset(0, "spy_run_type");
+    new runType = gsGetFlag(0, 0);  // 0=normal, 1=advanced, 2=expert
+    
+    // Customize spawn message based on run type
+    switch(runType) {
+        case 2: {
+            shset(0, "Behold! The mighty Daijou and fearsome Serpents emerge from the shadows!");
+            gsSayMessage(tag, 0);
+        }
+        case 1: {
+            shset(0, "The Death Snakes slither forth as Bengal Tigers prowl into view!");
+            gsSayMessage(tag, 0);
+        }
+        default: {
+            shset(0, "The spectral Ghosts materialize as the forest Greens advance!");
+            gsSayMessage(tag, 0);
+        }
+    }
+    
+    new members[MAX];
+    members = getteammembers();
+    
+    // Get count of team members
+    new memberCount = 0;
+    for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
+        memberCount++;
+    }
+    
+    new xc = 0;
+    new yc = 0;
+    
+    new by = TY + 8;
+    new bx = TX + 8;
+    
+    // Single player specific spawning
+    if(memberCount == 1) {
+        new playerRole = getrole(members[0]);
+        
+        for(new i = 0; i < KILLREQ; i++) {
+            shset(1, MOBSCRIPT); // Script name            
+            shset(0, "takedamage_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "attack_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "death_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "zone_playerdeath_script");
+            gsSetSFlag(0, 0, 1);
+            
+            // Spawn based on role and run type
+            switch(playerRole) {
+                case ROLEMAGE: {
+                    if(runType == 2) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, DAIJOU, 0, 0, 0, 0);
+                    }
+                    else if(runType == 1) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, SILVER_DRAGON, 0, 0, 0, 0);
+                    }
+                    else {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, GREEN, 0, 0, 0, 0);
+                    }
+                }
+                case ROLEWAR: {
+                    if(runType == 2) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, SERPENT, 0, 0, 0, 0);
+                    }
+                    else if(runType == 1) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, BENGAL_TIGER, 0, 0, 0, 0);
+                    }
+                    else {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, GHOST, 0, 0, 0, 0);
+                    }
+                }
+                case ROLEASSISTANT: {
+                    if(runType == 2) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, 
+                            gsRandom(0, 1) == 0 ? SERPENT : DAIJOU, 
+                            0, 0, 0, 0);
+                    }
+                    else if(runType == 1) {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, 
+                            gsRandom(0, 1) == 0 ? SILVER_DRAGON : BENGAL_TIGER, 
+                            0, 0, 0, 0);
+                    }
+                    else {
+                        gsSummon(4, bx + xc * 5, by + yc * 5, 
+                            gsRandom(0, 1) == 0 ? GHOST : GREEN, 
+                            0, 0, 0, 0);
+                    }
+                }
+            }
+            
+            if((yc = (yc + 1) % 5) == 0) {
+                xc = (xc + 1) % 5;
+            }
+        }
+    }
+    else {
+        // Team run spawning logic
+        for(new i = 0; i < KILLREQ; i++) {
+            shset(1, MOBSCRIPT);          
+            shset(0, "takedamage_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "attack_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "death_script");
+            gsSetSFlag(0, 0, 1);
+            shset(0, "zone_playerdeath_script");
+            gsSetSFlag(0, 0, 1);
+            
+            if(runType == 2) {
+                gsSummon(4, bx + xc * 5, by + yc * 5, 
+                    gsRandom(0, 1) == 0 ? DAIJOU : SERPENT, 
+                    0, 0, 0, 0);
+            }
+            else if(runType == 1) {
+                gsSummon(4, bx + xc * 5, by + yc * 5, 
+                    gsRandom(0, 1) == 0 ? SILVER_DRAGON : BENGAL_TIGER, 
+                    0, 0, 0, 0);
+            }
+            else {
+                gsSummon(4, bx + xc * 5, by + yc * 5, 
+                    gsRandom(0, 1) == 0 ? GHOST : GREEN, 
+                    0, 0, 0, 0);
+            }
+            
+            if((yc = (yc + 1) % 5) == 0) {
+                xc = (xc + 1) % 5;
+            }
+        }
+    }
+}
+
+public mpboost(sktid, amount) {
+    new hpcur, hpmax, mpcur, mpmax;
+
+    gsGetHPMPInfo(sktid, hpcur, hpmax, mpcur, mpmax);
+    gsSetHPMPInfo(sktid, hpcur, mpcur + amount <= mpmax ? mpcur + amount : mpcur);
+    
+    if(isinarea(sktid) == 1) {
+        shset(0, SCRIPTNAME);
+        shset(1, "mpboost");
+    
+        gsTimer(0, 1, 5, sktid, amount, 0, 0, 0);
+    }
+}
+
+public hpboost(sktid, amount) {
+    new hpcur, hpmax, mpcur, mpmax;
+
+    gsGetHPMPInfo(sktid, hpcur, hpmax, mpcur, mpmax);
+    gsSetHPMPInfo(sktid, hpcur + amount <= hpmax ? hpcur + amount : hpcur, mpcur);
+    
+    if(isinarea(sktid) == 1) {
+        shset(0, SCRIPTNAME);
+        shset(1, "hpboost");
+    
+        gsTimer(0, 1, 5, sktid, amount, 0, 0, 0);
+    }
+}
+
+getrole(sktid) {
+    shset(0, JOIN);
+    return gsGetFlag(sktid, 0);
+}
+
+isactive(sktid) {
+    shset(0, ACTIVE);
+    return gsGetFlag(sktid, 0);
+}
+
+isinarea(sktid) {
+    new x,y,z,m;
+    gsGetCoords(sktid, x, y, z, m);
+
+    if (m == TM && x >= TX && x <= DX && y >= TY && y <= DY) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+getteammembers() {
+    new members[MAX - 1];
+    new m = 0;
+    
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(isinarea(i) == 1 && isactive(i) == 1) {
+                members[m++] = i;
+            }
+        }
+    }
+    
+    //Flag close element with -1
+    members[m] = -1;
+    
+    return members;
+}
+
+scriptname(sktid) {
+    if(isgm(sktid) == 1) {
+        shset(0, "Script: ");
+        shappends(0, SCRIPTNAME);
+        gsStatusMessage(sktid, 0);
+    }   
+}
+
+isgm(sktid) {
+    shset(0, "is_gm");
+    if(gsGetFlag(sktid, 0) == 1) {
+        return 1;
+    }   
+    return 0;
+}

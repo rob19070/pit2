@@ -1,0 +1,534 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "spy9"
+
+#define REMSCRIPT "spy11"
+#define NPCTAG "spy_spy11_tag"
+
+#define LEADER "^spy_team_lead"
+#define JOIN "^spy_team"
+#define ACTIVE "^spy_team_active"
+#define ROLENONE 0
+#define ROLEMAGE 1
+#define ROLEWAR 2
+#define ROLEARCHER 3
+
+// Add Faldon day tracking for run resets
+#define QUESTDAY "#spy_team_day"
+#define DAYCOUNT "#spy_team_nr"
+#define ADVANCED_RUNS_FLAG "spy_adv_runs_"
+#define EXPERT_RUNS_FLAG "spy_exp_runs_"
+#define TOTAL_RUNS "spy_runs_"
+
+#define OX 209
+#define OY 228
+#define OM 5
+
+#define AX 258
+#define AY 139
+#define AM 4
+
+#define TX 279
+#define TY 165
+#define TM 4
+#define DX 297
+#define DY 179
+
+#define CTM 4
+#define CTX 237
+#define CTY 117
+#define CDX 279
+#define CDY 160
+
+#define MAX 255
+
+// Forward declarations
+forward public demoteleader(sktid);
+forward public leaderopts(mapid, npcid, sktid);
+forward public trigger(plrid, mapid, x, y, z);
+forward public converse(mapid, npcid, plrid, uidmsg);
+
+// Utility functions
+GetPermanentID(sktid) {
+    shset(0, "pid");
+    return gsGetFlag(sktid, 0);
+}
+
+getRankFromRuns(runs) {
+    if(runs < 5) return 0;
+    else if(runs < 10) return 1;      // Squire Initiate
+    else if(runs < 20) return 2;      // Apprentice Fighter
+    else if(runs < 35) return 3;      // Footman
+    else if(runs < 60) return 4;      // Man-at-Arms
+    else if(runs < 90) return 5;      // Sergeant
+    else if(runs < 140) return 6;     // Knight Errant
+    else if(runs < 200) return 7;     // Knight Defender
+    else if(runs < 300) return 8;     // Veteran Knight
+    else if(runs < 450) return 9;     // Master-at-Arms
+    else if(runs < 650) return 10;    // Champion Knight
+    else if(runs < 950) return 11;    // Lord Defender
+    else if(runs < 1400) return 12;   // Noble Champion
+    else if(runs < 2000) return 13;   // Royal Protector
+    else if(runs < 3000) return 14;   // Grand Champion
+    else return 15;                   // Legendary Defender
+}
+
+resetRunsIfNewDay(sktid) {
+    new pid = GetPermanentID(sktid);
+    
+    shset(0, "faldon_day");
+    new fday = gsGetFlag(0, 0);
+    
+    shset(0, QUESTDAY);
+    shappendn(0, pid);
+    new qday = gsGetFlag(0, 0);
+    
+    if(fday != qday) {
+        // Reset both advanced and expert runs
+        shset(0, ADVANCED_RUNS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, 0);
+        
+        shset(0, EXPERT_RUNS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, 0);
+        
+        // Update the quest day
+        shset(0, QUESTDAY);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, fday);
+    }
+}
+
+getAvailableRuns(sktid, &remainingAdvanced, &remainingExpert) {
+    new pid = GetPermanentID(sktid);
+    
+    // First check if we need to reset runs for new day
+    resetRunsIfNewDay(sktid);
+    
+    // Get total runs to determine rank
+    shset(0, TOTAL_RUNS);
+    shappendn(0, pid);
+    new totalRuns = gsGetFlag(0, 0);
+    new rank = getRankFromRuns(totalRuns);
+    
+    // Get current usage counts
+    shset(0, ADVANCED_RUNS_FLAG);
+    shappendn(0, pid);
+    new usedAdvanced = gsGetFlag(0, 0);
+    
+    shset(0, EXPERT_RUNS_FLAG);
+    shappendn(0, pid);
+    new usedExpert = gsGetFlag(0, 0);
+    
+    // Calculate allowed advanced runs based on rank
+    new allowedAdvanced = 0;
+    if(rank >= 3) allowedAdvanced++; // Rank 3
+    if(rank >= 4) allowedAdvanced++; // Rank 4
+    if(rank >= 5) allowedAdvanced++; // Rank 5
+    if(rank >= 8) allowedAdvanced++; // Rank 8
+    if(rank >= 10) allowedAdvanced++; // Rank 10
+    if(rank >= 11) allowedAdvanced++; // Rank 11
+
+    // Calculate allowed expert runs based on rank
+    new allowedExpert = 0;
+    if(rank >= 6) allowedExpert++; // First expert run at rank 6
+    if(rank >= 13) allowedExpert++; // Second expert run at rank 13
+    
+    // Store in out parameters
+    remainingAdvanced = allowedAdvanced - usedAdvanced;
+    remainingExpert = allowedExpert - usedExpert;
+}
+
+
+incrementRunCounter(sktid, isExpert) {
+    new pid = GetPermanentID(sktid);
+    
+    if(isExpert) {
+        shset(0, EXPERT_RUNS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, gsGetFlag(0, 0) + 1);
+    } else {
+        shset(0, ADVANCED_RUNS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, gsGetFlag(0, 0) + 1);
+    }
+}
+
+heal(sktid) {
+    new hp, mhp, mp, mmp;
+    gsGetHPMPInfo(sktid, hp, mhp, mp, mmp);
+    gsSetHPMPInfo(sktid, mhp, mmp);
+}
+
+isleader(sktid) {
+    shset(0, LEADER);
+    return gsGetFlag(sktid, 0);
+}
+
+iswaiting(sktid) {
+    return isinarea(sktid);
+}
+
+isactive(sktid) {
+    shset(0, ACTIVE);
+    return gsGetFlag(sktid, 0);
+}
+
+isgm(sktid) {
+    shset(0, "is_gm");
+    if(gsGetFlag(sktid, 0) == 1) {
+        return 1;
+    }   
+    return 0;
+}
+
+scriptname(sktid) {
+    if(isgm(sktid) == 1) {
+        shset(0, "Script: ");
+        shappends(0, SCRIPTNAME);
+        gsStatusMessage(sktid, 0);
+    }   
+}
+
+isinarea(sktid) {
+    new x, y, z, m;
+    gsGetCoords(sktid, x, y, z, m);
+
+    if(m == TM && x >= TX && x <= DX && y >= TY && y <= DY) {
+        return 1;
+    }
+    return 0;
+}
+
+isincentralarea(sktid) {
+    new x, y, z, m;
+    gsGetCoords(sktid, x, y, z, m);
+
+    if(m == CTM && x >= CTX && x <= CDX && y >= CTY && y <= CDY) {
+        return 1;
+    }
+    return 0;
+}
+
+anyleaderinarea() {
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(iswaiting(i) == 1) {
+                if(isleader(i) == 1) {
+                    return i;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+anyincentralarea() {
+    for(new i = 0; i < MAX; i++) {
+        if(isincentralarea(i) == 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+getteammembers() {
+    new members[MAX];
+    new m = 0;
+    
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(iswaiting(i) == 1 && isactive(i) == 1) {
+                members[m++] = i;
+            }
+        }
+    }
+    
+    // Flag close element with -1
+    members[m] = -1;
+    
+    return members;
+}
+
+killmobs() {
+    new i = 8192 + (2048 * AM);
+
+    for(new a = 0; a < 2048; ++a) {
+        ++i;
+        shset(0, "monster_number");
+        new mobnr = gsGetFlag(i, 0); 
+        if(mobnr != 10 && mobnr != 0 && isincentralarea(i) == 1) {
+            gsSetHPMPInfo(i, 0, 0);
+            gsKillSprite(0, i);
+        }
+    }
+}
+
+warpout(sktid) {
+    shset(0, JOIN);
+    new role = gsGetFlag(sktid, 0);
+
+    if(role != ROLENONE) {
+        shset(0, DAYCOUNT);
+        new c = gsGetFlag(sktid, 0);
+        gsSetFlag(sktid, 0, c - 1);
+    }
+    gsSetCoords(sktid, OX, OY, 0, OM);
+}
+
+removeinactive() {
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(iswaiting(i) == 1) {
+                if(isactive(i) == 0) {
+                    warpout(i);
+                }
+            }
+        }
+    }
+}
+
+goin(runType = 0) {  // 0 = normal run, 1 = advanced run, 2 = expert run
+    killmobs();
+    
+    removeinactive(); // Warp players that are not part of team out.
+    
+    new teamMembers[MAX];
+    teamMembers = getteammembers();
+    
+    // Store run type for spy12 to use when awarding points
+    shset(0, "spy_run_type");
+    gsSetFlag(0, 0, runType);
+    
+    // Initialize timer at 0
+    shset(0, "spy_leaderboard_time");
+    gsSetFlag(0, 0, 0);
+    
+    // Warp team members to area.
+    for(new i = 0; i < sizeof(teamMembers) && teamMembers[i] != -1; i++) {
+        gsSetCoords(teamMembers[i], AX, AY, 0, AM);
+    }
+    
+    // Format the team message string
+    shset(3, "Team members");
+    for(new i = 0; i < sizeof(teamMembers) && teamMembers[i] != -1; i++) {
+        shset(1, "name");
+        gsGetSFlag(teamMembers[i], 1, 2);
+        shappends(3, ", ");
+        shappendb(3, 2);
+        
+        shappends(3, " (");
+        shset(1, JOIN);
+        switch(gsGetFlag(teamMembers[i], 1)) {
+            case ROLEMAGE: shappends(3, "Mage");
+            case ROLEWAR: shappends(3, "Warrior");
+            case ROLEARCHER: shappends(3, "Archer");
+        }
+        
+        shappends(3, isleader(teamMembers[i]) == 1 ? ", Team Leader)" : ")");
+    }
+    
+    // Add run type to message
+    shappends(3, "\nStarting ");
+    switch(runType) {
+        case 0: shappends(3, "Normal");
+        case 1: shappends(3, "Advanced");
+        case 2: shappends(3, "Expert");
+    }
+    shappends(3, " Run");
+    
+    // Send the message to team members
+    for(new i = 0; i < sizeof(teamMembers) && teamMembers[i] != -1; i++) {
+        shappends(3, "                                              ");
+        gsTutorialBegin();
+        gsTutorialAdd(3);
+        gsTutorialEnd(teamMembers[i]);
+    }
+    
+    shset(0, REMSCRIPT);
+    shset(1, "countdown");
+    gsCall(0, 1, 10, runType, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+giveoptions(mapid, npcid, sktid) {
+    new lead = anyleaderinarea();
+
+    shset(0, JOIN);
+    new role = gsGetFlag(sktid, 0);
+    
+    if(role == ROLENONE) {
+        shset(0, "You didn't pick a role... *cough* cheater *cough*");
+        gsStatusMessage(sktid, 0);
+        warpout(sktid);
+        return;
+    }
+
+    if(lead == 0) {
+        shset(0, LEADER);
+        gsSetFlag(sktid, 0, 1);
+
+        shset(0, ACTIVE);
+        gsSetFlag(sktid, 0, 1);
+
+        shset(0, SCRIPTNAME);
+        shset(1, "leaderopts");
+        gsTimer(0, 1, 100, mapid, npcid, sktid, 0, 0);
+
+        shset(0, "You are the team leader, get all participants to join the team. Shortly you will see the leader menu.");
+        gsStatusMessage(sktid, 0);
+        
+        shset(0, "I am the team leader.");
+        gsSayMessage(sktid, 0);
+
+        heal(sktid);
+    }
+    else {
+        if(isactive(sktid) == 0) {
+            shset(0, ACTIVE);
+            gsSetFlag(sktid, 0, 1);
+        
+            shset(0, "name");
+            gsGetSFlag(lead, 0, 1);
+        
+            shset(0, "You joined the team, ");
+            shappendb(0, 1);
+            shappends(0, " is the team leader.");
+        
+            gsStatusMessage(sktid, 0);
+            
+            new teamMembers[MAX];
+            teamMembers = getteammembers();
+                        
+            for(new i = 0; i < sizeof(teamMembers) && teamMembers[i] != -1; i++) {
+                if(teamMembers[i] != sktid) {
+                    shset(0, "name");
+                    gsGetSFlag(sktid, 0, 1);
+                    
+                    shappends(1, " has joined the team.");
+                    
+                    gsStatusMessage(teamMembers[i], 1);
+                }
+            }
+            heal(sktid);
+        }
+        else {
+            shset(0, "You have already joined the team, ");
+            
+            if(lead == sktid) {
+                shappends(0, "you are the team leader.");
+            }
+            else {
+                shset(1, "name");
+                gsGetSFlag(lead, 1, 0);
+                shappends(0, " is the team leader.");
+            }
+        
+            gsStatusMessage(sktid, 0);
+        }
+    }
+}
+
+public leaderopts(mapid, npcid, sktid) {
+    if(iswaiting(sktid) == 1 && isactive(sktid) == 1 && isleader(sktid) == 1) {
+        gsConvBegin();
+        shset(0, "As team leader you decide when it's time to go in, you have a minute to select a run type. If you don't, a new leader will be picked.");
+        gsConvSetMessage(0);
+        
+        // Normal run always available
+        shset(0, "Start Normal Run (Ghost & Green - 1 point reward)");
+        gsConvAddOption(1, 0);
+        
+        // Check total runs and available runs
+        new remainingAdvanced, remainingExpert;
+        getAvailableRuns(sktid, remainingAdvanced, remainingExpert);
+        
+        new pid = GetPermanentID(sktid);
+        shset(0, TOTAL_RUNS);
+        shappendn(0, pid);
+        new totalRuns = gsGetFlag(0, 0);
+        new rank = getRankFromRuns(totalRuns);
+        
+        if((rank >= 2 && remainingAdvanced > 0) || isgm(sktid)) {
+            shset(0, "Start Advanced Run (Silver Dragon & Bengal Tiger - 2 point reward) [");
+            shappendn(0, remainingAdvanced);
+            shappends(0, remainingAdvanced == 1 ? " run remaining]" : " runs remaining]");
+            gsConvAddOption(3, 0);
+        }
+        
+        if((rank >= 10 && remainingExpert > 0) || isgm(sktid)) {
+            shset(0, "Start Expert Run (Daijou & Serpent - 3 point reward) [");
+            shappendn(0, remainingExpert);
+            shappends(0, remainingExpert == 1 ? " run remaining]" : " runs remaining]");
+            gsConvAddOption(4, 0);
+        }
+        
+        shset(0, "Give up team leader position.");
+        gsConvAddOption(2, 0);
+        
+        gsConvEnd(npcid, mapid, sktid);
+        
+        shset(0, SCRIPTNAME);
+        shset(1, "demoteleader");
+        gsTimer(0, 1, 300, sktid, 0, 0, 0, 0);
+    }
+}
+
+public demoteleader(sktid) {
+    if(anyleaderinarea() == sktid) {
+        shset(0, LEADER);
+        gsSetFlag(sktid, 0, 0);
+        shset(0, "I gave up the team leader position.");
+        gsSayMessage(sktid, 0);
+    }
+}
+
+public trigger(plrid, mapid, x, y, z) {
+    warpout(plrid);
+}
+
+public converse(mapid, npcid, plrid, uidmsg) {
+    scriptname(plrid);
+
+    switch(uidmsg) {
+        case 0: giveoptions(mapid, npcid, plrid);
+        case 1: { 
+            if(isleader(plrid) == 1) {
+                if(anyincentralarea() == 0) {
+                    goin(0);  // Normal run
+                }
+            }
+        }
+        case 2: demoteleader(plrid);
+        case 3: {  // Advanced run
+            if(isleader(plrid) == 1) {
+                if(anyincentralarea() == 0) {
+                    new remainingAdvanced, remainingExpert;
+                    getAvailableRuns(plrid, remainingAdvanced, remainingExpert);
+                    if(remainingAdvanced > 0 || isgm(plrid)) {
+                        incrementRunCounter(plrid, false);  // false for advanced run
+                        goin(1);  // Advanced run
+                    }
+                }
+            }
+        }
+        case 4: {  // Expert run
+            if(isleader(plrid) == 1) {
+                if(anyincentralarea() == 0) {
+                    new remainingAdvanced, remainingExpert;
+                    getAvailableRuns(plrid, remainingAdvanced, remainingExpert);
+                    if(remainingExpert > 0 || isgm(plrid)) {
+                        incrementRunCounter(plrid, true);  // true for expert run
+                        goin(2);  // Expert run
+                    }
+                }
+            }
+        }
+    }
+}
+
+

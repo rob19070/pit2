@@ -1,0 +1,252 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "rob04"
+#define MAX_TOP_RUNNERS 10
+#define MAX 255
+#define TOTAL_RUNS "spy_runs_"
+
+// Storage for leaderboard data
+#define LB_PLAYER_ID "leaderboard_pid_"
+#define LB_PLAYER_RUNS "leaderboard_runs_"
+
+// Forward declarations
+forward public spawn(npcidtag, mapid, npcid);
+forward public converse(mapid, npcid, plrid, uidmsg);
+forward public getLeaderboardText(outputSlot);
+
+GetPermanentID(sktid) {
+    shset(0, "pid");
+    return gsGetFlag(sktid, 0);
+}
+
+isgm(sktid) {
+    shset(0, "is_gm");
+    return gsGetFlag(sktid, 0);
+}
+
+scriptname(sktid) {
+    if(isgm(sktid)) {
+        shset(0, "Script: ");
+        shappends(0, SCRIPTNAME);
+        gsStatusMessage(sktid, 0);
+    }   
+}
+
+arrayInsertSorted(arr[], val, len) {
+    for(new i = 0; i < len; i++) {
+        if(arr[i] < val) {
+            arrayInsertItem(arr, i, val, len);
+            return i;
+        }
+    }
+    return -1;
+}
+
+arrayInsertItem(arr[], pos, val, len) {
+    if(pos < 0) return;
+    
+    for(new i = len - 1; i >= pos; i--) {
+        if(i + 1 < len) {
+            arr[i + 1] = arr[i];
+        }
+    }
+    arr[pos] = val;
+}
+
+arrayRemoveItem(arr[], pos, len) {
+    if(pos < 0) return;
+    
+    for(new i = pos; i < len; i++) {
+        if(i + 1 < len) {
+            arr[i] = arr[i + 1];
+        }
+    }
+    arr[len - 1] = 0;
+}
+
+arrayItemIndex(arr[], val, len) {
+    for(new i = 0; i < len; i++) {
+        if(arr[i] == val) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+public getLeaderboardText(outputSlot) {
+    shset(outputSlot, "Top 10 Pit Killers:\n====================\n");
+    
+    for(new i = 0; i < MAX_TOP_RUNNERS; i++) {
+        shset(1, LB_PLAYER_ID);
+        shappendn(1, i);
+        new pid = gsGetFlag(0, 1);
+        
+        shset(1, LB_PLAYER_RUNS);
+        shappendn(1, i);
+        new runs = gsGetFlag(0, 1);
+        
+        if(pid > 0) {
+            shset(1, "pnm");
+            shappendn(1, pid);
+            gsGetSFlag(0, 1, 1);
+        } else {
+            shset(1, "<none>");
+        }
+        
+        shset(2, "");
+        shappendn(2, i + 1);
+        shappends(2, ". ");
+        shappendb(2, 1);
+        shappends(2, " (");
+        shappendn(2, runs);
+        shappends(2, ")\n");
+        shappendb(outputSlot, 2);
+    }
+}
+
+updateLeaderboard() {
+    new pids[MAX_TOP_RUNNERS];
+    new runs[MAX_TOP_RUNNERS];
+    
+    // Initialize arrays
+    for(new i = 0; i < MAX_TOP_RUNNERS; i++) {
+        shset(0, LB_PLAYER_ID);
+        shappendn(0, i);
+        pids[i] = gsGetFlag(0, 0);
+        
+        shset(0, LB_PLAYER_RUNS);
+        shappendn(0, i);
+        runs[i] = gsGetFlag(0, 0);
+    }
+    
+    // Scan all players
+    for(new playerid = 0; playerid < MAX; playerid++) {
+        shset(0, "level");
+        if(gsGetFlag(playerid, 0) > 0) {
+            new pid = GetPermanentID(playerid);
+            
+            shset(0, TOTAL_RUNS);
+            shappendn(0, pid);
+            new playerRuns = gsGetFlag(0, 0);
+            
+            if(playerRuns > 0) {
+                // Check if player is already on leaderboard
+                new pidIndex = arrayItemIndex(pids, pid, MAX_TOP_RUNNERS);
+                if(pidIndex != -1) {
+                    arrayRemoveItem(pids, pidIndex, MAX_TOP_RUNNERS);
+                    arrayRemoveItem(runs, pidIndex, MAX_TOP_RUNNERS);
+                }
+                
+                // Insert new score if high enough
+                new newIndex = arrayInsertSorted(runs, playerRuns, MAX_TOP_RUNNERS);
+                if(newIndex != -1) {
+                    arrayInsertItem(pids, newIndex, pid, MAX_TOP_RUNNERS);
+                }
+            }
+        }
+    }
+    
+    // Save updated leaderboard
+    for(new i = 0; i < MAX_TOP_RUNNERS; i++) {
+        shset(0, LB_PLAYER_ID);
+        shappendn(0, i);
+        gsSetFlag(0, 0, pids[i]);
+        
+        shset(0, LB_PLAYER_RUNS);
+        shappendn(0, i);
+        gsSetFlag(0, 0, runs[i]);
+    }
+}
+
+addTestRun(plrid) {
+    new pid = GetPermanentID(plrid);
+    
+    // Get current runs
+    shset(0, TOTAL_RUNS);
+    shappendn(0, pid);
+    new currentRuns = gsGetFlag(0, 0);
+    
+    // Add one run
+    gsSetFlag(0, 0, currentRuns + 1);
+    
+    // Update player name in case it changed
+    shset(0, "name");
+    gsGetSFlag(plrid, 0, 1);
+    shset(0, "pnm");
+    shappendn(0, pid);
+    gsSetSFlag(0, 0, 1);
+    
+    // Update leaderboard
+    updateLeaderboard();
+    
+    // Notify player
+    shset(0, "Added 1 run. You now have ");
+    shappendn(0, currentRuns + 1);
+    shappends(0, " total runs.");
+    gsStatusMessage(plrid, 0);
+}
+
+showLeaderboard(mapid, npcid, plrid) {
+    // Update leaderboard data before showing it
+    updateLeaderboard();
+    
+    gsConvBegin();
+    
+    shset(0, "Top 10 Pit Killers:\n====================\n");
+    
+    for(new i = 0; i < MAX_TOP_RUNNERS; i++) {
+        shset(1, LB_PLAYER_ID);
+        shappendn(1, i);
+        new pid = gsGetFlag(0, 1);
+        
+        shset(1, LB_PLAYER_RUNS);
+        shappendn(1, i);
+        new runs = gsGetFlag(0, 1);
+        
+        if(pid > 0) {
+            shset(1, "pnm");
+            shappendn(1, pid);
+            gsGetSFlag(0, 1, 1);
+        } else {
+            shset(1, "<none>");
+        }
+        
+        shset(2, "");
+        shappendn(2, i + 1);
+        shappends(2, ". ");
+        shappendb(2, 1);
+        shappends(2, " (");
+        shappendn(2, runs);
+        shappends(2, ")\n");
+        shappendb(0, 2);
+    }
+    
+    gsConvSetMessage(0);
+    
+    // Add run test option for everyone
+    shset(0, "Add 1 run (for testing)");
+    gsConvAddOption(1, 0);
+    
+    shset(0, "Leave");
+    gsConvAddOption(2, 0);
+    
+    gsConvEnd(npcid, mapid, plrid);
+}
+
+public spawn(npcidtag, mapid, npcid) {
+    return;
+}
+
+public converse(mapid, npcid, plrid, uidmsg) {
+    scriptname(plrid);
+    
+    switch(uidmsg) {
+        case 0: showLeaderboard(mapid, npcid, plrid);
+        case 1: {
+            addTestRun(plrid);
+            showLeaderboard(mapid, npcid, plrid);
+        }
+        case 2: return;
+    }
+}

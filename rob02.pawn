@@ -1,0 +1,875 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "rob02"
+#define REMSCRIPT "rob09"
+// Point and reward related defines
+#define POINTS_FLAG "spy_points_"
+#define SPELL_REROLL_FLAG "spell_reroll_"
+
+// Forward declarations
+forward public converse(mapid, npcid, sktid, uidmsg);
+forward getPoints(sktid);
+forward reward(sktid, force);
+forward focusReward(sktid, rewardType);
+forward addGMPoints(sktid);
+forward spellLevelUpReward(mapid, npcid, sktid);
+forward showParticle(sktid);
+
+GetPermanentID(sktid) {
+    shset(0, "pid");
+    return gsGetFlag(sktid, 0);
+}
+
+getPoints(sktid) {
+    new pid = GetPermanentID(sktid);
+    shset(0, POINTS_FLAG);
+    shappendn(0, pid);
+    return gsGetFlag(0, 0);
+}
+
+showParticle(sktid) {
+    // Call rob09's particle function
+    shset(6, REMSCRIPT);
+    shset(7, "showParticle");
+    gsCall(6, 7, sktid);
+}
+
+addGMPoints(sktid) {
+    
+    new pid = GetPermanentID(sktid);
+    
+    shset(0, POINTS_FLAG);
+    shappendn(0, pid);
+    new currentPoints = gsGetFlag(0, 0);
+    gsSetFlag(0, 0, currentPoints + 50);
+    
+    shset(0, "Added 50 points. You now have ");
+    shappendn(0, currentPoints + 50);
+    shappends(0, " points.");
+    gsStatusMessage(sktid, 0);
+}
+
+spellLevelUpReward(mapid, npcid, sktid) {
+    new pid = GetPermanentID(sktid);
+    new points = getPoints(sktid);
+    
+    // Check if player has enough points
+    if(points >= 100) {
+        // Deduct points
+        shset(0, POINTS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, points - 100);
+        
+        // Define all possible spells (59 spells)
+        new spells[] = {
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 
+            21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 
+            39, 41, 43, 44, 45, 46, 47, 48, 49, 51, 53
+        };
+        
+        // Find a spell that can be upgraded
+        new spellId = 0;
+        new maxAttempts = sizeof(spells);
+        new attempts = 0;
+        
+        while(attempts < maxAttempts) {
+            // Randomly select a spell initially
+            new randomIndex = gsRandom(0, sizeof(spells) - 1);
+            spellId = spells[randomIndex];
+            
+            // Get current spell level
+            new currentLevel = gsGetSpellLevel(sktid, spellId);
+            
+            // If spell is below level 20, we can upgrade it
+            if(currentLevel < 20) {
+                break;  // Found a spell to upgrade
+            }
+            
+            attempts++;
+        }
+        
+        // Check if all spells are maxed out
+        if(attempts >= maxAttempts) {
+            shset(0, "All your spells are already at maximum level!");
+            gsStatusMessage(sktid, 0);
+            
+            // Refund points
+            shset(0, POINTS_FLAG);
+            shappendn(0, pid);
+            gsSetFlag(0, 0, points);
+            
+            return;
+        }
+        
+        // Store the selected spell temporarily
+        shset(0, SPELL_REROLL_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, spellId);
+        
+        gsConvBegin();
+        
+        shset(0, "Hope its the spell you wanted...");
+        gsConvSetMessage(0);
+        
+        // Spell details option
+        shset(0, "Upgrade ");
+        switch(spellId) {
+            case 1: shappends(0, "Lesser Heal");
+            case 2: shappends(0, "Greater Heal");
+            case 3: shappends(0, "Poison Cloud");
+            case 4: shappends(0, "Cure Poison");
+            case 5: shappends(0, "Shield");
+            case 6: shappends(0, "Holy Armor");
+            case 7: shappends(0, "Empower");
+            case 8: shappends(0, "Antimagic");
+            case 9: shappends(0, "Earthquake");
+            case 10: shappends(0, "Blizzard");
+            case 11: shappends(0, "Burning Rain");
+            case 12: shappends(0, "Meteor Storm");
+            case 13: shappends(0, "Wraith");
+            case 14: shappends(0, "Polymorph");
+            case 15: shappends(0, "Cowardice");
+            case 16: shappends(0, "Exorcism");
+            case 17: shappends(0, "Magic Missile");
+            case 18: shappends(0, "Fireball");
+            case 19: shappends(0, "Flaming Arrow");
+            case 20: shappends(0, "Icebolt");
+            case 21: shappends(0, "Flame Strike");
+            case 22: shappends(0, "Dark Touch");
+            case 23: shappends(0, "Flash");
+            case 24: shappends(0, "Medusa's Stare");
+            case 25: shappends(0, "Lightning");
+            case 26: shappends(0, "Nova");
+            case 27: shappends(0, "Town Portal");
+            case 28: shappends(0, "Ethereal Gate");
+            case 29: shappends(0, "Holy Strike");
+            case 30: shappends(0, "Curse");
+            case 31: shappends(0, "Weaken");
+            case 32: shappends(0, "Night Sight");
+            case 33: shappends(0, "Chain Lightning");
+            case 34: shappends(0, "Greed");
+            case 35: shappends(0, "Death Darts");
+            case 36: shappends(0, "Slow");
+            case 37: shappends(0, "Banish");
+            case 38: shappends(0, "Illusionary Menace");
+            case 39: shappends(0, "Mind Blast");
+            case 40: shappends(0, "Nature Shield");
+            case 41: shappends(0, "True Seeing");
+            case 42: shappends(0, "Summon Wolf");
+            case 43: shappends(0, "Energy Bolt");
+            case 44: shappends(0, "Holy Aura");
+            case 45: shappends(0, "Raise Dead");
+            case 46: shappends(0, "Summon Spiders");
+            case 47: shappends(0, "Summon Slimes");
+            case 48: shappends(0, "Teleport");
+            case 49: shappends(0, "Charged Bolt");
+            case 50: shappends(0, "Raindance");
+            case 51: shappends(0, "Bless");
+            case 52: shappends(0, "Nauseate");
+            case 53: shappends(0, "Banshee's Wail");
+            case 54: shappends(0, "Bestow Favor");
+            case 55: shappends(0, "Fire Feet");
+            case 56: shappends(0, "Fire Wall");
+            case 57: shappends(0, "Dissipate");
+            case 58: shappends(0, "Holy Fire");
+            case 59: shappends(0, "Healing Wind");
+            default: shappends(0, "Unknown Spell");
+        }
+        shappends(0, " from level ");
+        new currentLevel = gsGetSpellLevel(sktid, spellId);
+        shappendn(0, currentLevel);
+        shappends(0, " to level ");
+        shappendn(0, currentLevel + 1);
+        gsConvAddOption(7, 0);
+        
+        // Reroll option
+        shset(0, "Reroll for 50 points (one time only)");
+        gsConvAddOption(8, 0);
+        
+        gsConvEnd(npcid, mapid, sktid);
+    } else {
+        shset(0, "You need 100 points for a spell level up roll.");
+        gsStatusMessage(sktid, 0);
+    }
+}
+
+reward(sktid, force) {
+    new pid = GetPermanentID(sktid);
+    new points = getPoints(sktid);
+    
+    if(points >= 1 || force == 1) {
+        // If not forced, deduct points
+        if(force != 1) {
+            shset(0, POINTS_FLAG);
+            shappendn(0, pid);
+            gsSetFlag(0, 0, points - 1);
+        }
+        
+        new cit = iscitizen(sktid);
+        new rnd = gsRandom(0, 10000);  // Using 10000 for precise percentages
+        
+        new itemid = 0;
+        new prefix = 0;
+        new suffix = 0;
+        new amount = 0;
+        
+        // Build reward message
+        shset(0, "Karmeliet gave you ");
+        
+                
+        if(rnd >= 0 && rnd < 17 && cit == 1) {
+            // Rare item reward (0.17% chance)
+	    showParticle(sktid);
+            new itemList[] = {419, 465, 401, 262, 178, 463, 261, 359, 483, 387, 488, 489, 421, 395, 440, 350, 469, 379, 152, 268, 486, 485, 334, 481};
+            itemid = itemList[gsRandom(0, sizeof(itemList) - 1)];
+            prefix = gsRandom(1, 24) * 2 - 1;
+            suffix = gsRandom(1, 24) * 2;
+            
+            // Get item name
+            shset(1, "obj");
+            shappendn(1, itemid);
+            gsGetSFlag(0, 1, 1);
+            shappendb(0, 1);
+            
+            gsInvAddItem(sktid, itemid, 0, prefix, suffix);
+        }
+        else if(rnd >= 17 && rnd < 173 && cit == 1) {
+            // Mystery potion reward (1.56% chance)
+            itemid = 388;
+            amount = gsRandom(3, 5);
+            
+            shappendn(0, amount);
+            shappends(0, " Mystery Potion");
+            if(amount != 1) {
+                shappends(0, "s");
+            }
+            
+            // Set prototype and title for mystery potion
+            shset(1, "mi_prototype");
+            gsSetFlag(sktid, 1, itemid);
+            shset(1, "mi_title");
+            gsSetFlag(sktid, 1, 66);
+            
+            gsInvAddItem(sktid, itemid, amount);
+            gsInvSend(sktid);
+        }
+        else if(rnd >= 173 && rnd < 190 && cit == 1) {
+            // Spellbook reward (0.17% chance)
+	    showParticle(sktid);
+            new spells[] = {33, 49, 35, 43, 21, 26, 47, 31, 3};
+            itemid = 110; // book
+            suffix = spells[gsRandom(0, sizeof(spells) - 1)];
+            
+            new levelRnd = gsRandom(0, 100);
+            if(suffix == 48) {  // Teleport spell
+                if(levelRnd < 40) prefix = 10;
+                else if(levelRnd < 70) prefix = 11;
+                else if(levelRnd < 95) prefix = 12;
+                else prefix = 13;
+            } else {
+                if(levelRnd < 40) prefix = 12;
+                else if(levelRnd < 75) prefix = 13;
+                else prefix = 14;
+            }
+            
+            shappends(0, "Level ");
+            shappendn(0, prefix);
+            shappends(0, " ");
+            
+            // Get item name
+            shset(1, "obj");
+            shappendn(1, itemid);
+            gsGetSFlag(0, 1, 1);
+            shappendb(0, 1);
+            
+            gsInvAddItem(sktid, itemid, 0, 0, prefix, suffix);
+        }
+        else if(rnd >= 190 && rnd < 1190 && cit == 1) {
+            // Consumable rewards (6.5% chance)
+            new consumableRoll = gsRandom(0, 3);  // 4 types of consumables
+            
+            switch(consumableRoll) {
+                case 0: {  // Apple Pies
+                    itemid = 88;
+                    amount = gsRandom(200, 400);
+                }
+                case 1: {  // Zer Blades
+                    itemid = 324;
+                    amount = gsRandom(50, 100);
+                }
+                case 2: {  // Mithril Arrows
+                    itemid = 186;
+                    amount = gsRandom(300, 500);
+                }
+                case 3: {  // Elixer of Rejuvenation
+                    itemid = 52;
+                    amount = gsRandom(250, 500);
+                }
+            }
+            
+            shappendn(0, amount);
+            shappends(0, " ");
+            
+            // Get item name
+            shset(1, "obj");
+            shappendn(1, itemid);
+            gsGetSFlag(0, 1, 1);
+            shappendb(0, 1);
+            
+            gsInvAddItem(sktid, itemid, amount);
+        }
+        else {
+            // Gold reward (91.6% chance)
+            itemid = 13; // gold
+            
+            if(cit == 1) {
+                amount = gsRandom(355, 425);
+            }
+            else {
+                amount = gsRandom(90, 130);
+            }
+            
+            shappendn(0, amount);
+            shappends(0, " gold");
+            
+            gsInvAddItem(sktid, itemid, amount);
+        }
+        
+        gsInvSend(sktid);
+        
+        // Complete message
+        shappends(0, ". ");
+        if(force != 1) {
+            shappends(0, "You have ");
+            shappendn(0, points - 1);
+            shappends(0, " points remaining.");
+        }
+        
+        gsStatusMessage(sktid, 0);
+    } else {
+        shset(0, "You don't have enough points for this reward.");
+        gsStatusMessage(sktid, 0);
+    }
+}
+
+focusReward(sktid, rewardType) {
+    new pid = GetPermanentID(sktid);
+    new points = getPoints(sktid);
+    
+    if(points >= 10) {
+        // Deduct points
+        shset(0, POINTS_FLAG);
+        shappendn(0, pid);
+        gsSetFlag(0, 0, points - 10);
+        
+        new cit = iscitizen(sktid);
+        new rnd = gsRandom(0, 10000);  // Using 10000 for precise percentages
+        
+        new itemid = 0;
+        new prefix = 0;
+        new suffix = 0;
+        new amount = 0;
+        
+        // Build reward message
+        shset(0, "Karmeliet gave you ");
+        
+                
+        if(rnd >= 0 && rnd < 300 && cit == 1) {
+            // Targeted rare reward (3% chance)
+	    showParticle(sktid);
+            new itemList[] = {419, 465, 401, 262, 178, 463, 261, 359, 483, 387, 488, 489, 421, 395, 440, 350, 469, 379, 152, 268, 486, 485, 334, 481};
+            
+            if(rewardType == 1) {  // Spell focus
+                new spells[] = {33, 49, 35, 43, 21, 26, 47, 31, 3};
+                itemid = 110; // book
+                suffix = spells[gsRandom(0, sizeof(spells) - 1)];
+                
+                new levelRnd = gsRandom(0, 100);
+                if(suffix == 48) {  // Teleport spell
+                    if(levelRnd < 25) prefix = 10;
+                    else if(levelRnd < 55) prefix = 11;
+                    else if(levelRnd < 85) prefix = 12;
+                    else prefix = 13;
+                } else {
+                    if(levelRnd < 20) prefix = 12;
+                    else if(levelRnd < 45) prefix = 13;
+                    else if(levelRnd < 56) prefix = 14;
+                    else if(levelRnd < 75) prefix = 15;
+                    else if(levelRnd < 95) prefix = 16;
+                }
+                
+                shappends(0, "Level ");
+                shappendn(0, prefix);
+                shappends(0, " ");
+                
+                // Get item name
+                shset(1, "obj");
+                shappendn(1, itemid);
+                gsGetSFlag(0, 1, 1);
+                shappendb(0, 1);
+                
+                gsInvAddItem(sktid, itemid, 0, 0, prefix, suffix);
+            } else {  // Item focus
+                itemid = itemList[gsRandom(0, sizeof(itemList) - 1)];
+                prefix = gsRandom(1, 24) * 2 - 1;
+                suffix = gsRandom(1, 24) * 2;
+                
+                // Get item name
+                shset(1, "obj");
+                shappendn(1, itemid);
+                gsGetSFlag(0, 1, 1);
+                shappendb(0, 1);
+                
+                gsInvAddItem(sktid, itemid, 0, 0, prefix, suffix);
+            }
+        }
+        else if(rnd >= 31 && rnd < 36 && cit == 1) {
+            // Non-targeted rare reward (0.06% chance)
+            if(rewardType == 1) {  // Spell focus (get rare item)
+                itemid = 419;  // Example item
+                prefix = gsRandom(1, 24) * 2 - 1;
+                suffix = gsRandom(1, 24) * 2;
+                
+                // Get item name
+                shset(1, "obj");
+                shappendn(1, itemid);
+                gsGetSFlag(0, 1, 1);
+                shappendb(0, 1);
+                
+                gsInvAddItem(sktid, itemid, 0, prefix, suffix);
+            } else {  // Item focus (get spellbook)
+                new spells[] = {33, 49, 35, 43, 21, 26, 47, 31, 3};
+                itemid = 110; // book
+                suffix = spells[gsRandom(0, sizeof(spells) - 1)];
+                
+                new levelRnd = gsRandom(0, 100);
+                if(suffix == 48) {
+                    if(levelRnd < 25) prefix = 10;
+                    else if(levelRnd < 55) prefix = 11;
+                    else if(levelRnd < 85) prefix = 12;
+                    else prefix = 13;
+                } else {
+                    if(levelRnd < 20) prefix = 12;
+                    else if(levelRnd < 45) prefix = 13;
+                    else if(levelRnd < 56) prefix = 14;
+                    else if(levelRnd < 75) prefix = 15;
+                    else if(levelRnd < 95) prefix = 16;
+                }
+                
+                shappends(0, "Level ");
+                shappendn(0, prefix);
+                shappends(0, " ");
+                
+                // Get item name
+                shset(1, "obj");
+                shappendn(1, itemid);
+                gsGetSFlag(0, 1, 1);
+                shappendb(0, 1);
+                
+                gsInvAddItem(sktid, itemid, 0, 0, prefix, suffix);
+            }
+        }
+        else if(rnd >= 17 && rnd < 173 && cit == 1) {
+            // Mystery potion reward (1.56% chance)
+            itemid = 388;
+            amount = gsRandom(12, 20);
+            
+            shappendn(0, amount);
+            shappends(0, " Mystery Potion");
+            if(amount != 1) {
+                shappends(0, "s");
+            }
+            
+            // Set prototype and title for mystery potion
+            shset(1, "mi_prototype");
+            gsSetFlag(sktid, 1, itemid);
+            shset(1, "mi_title");
+            gsSetFlag(sktid, 1, 66);
+            
+            gsInvAddItem(sktid, itemid, amount);
+            gsInvSend(sktid);
+        }
+        else if(rnd >= 193 && rnd < 1193 && cit == 1) {
+            // Consumable rewards (6.5% chance)
+            new consumableRoll = gsRandom(0, 3);
+            
+            switch(consumableRoll) {
+                case 0: {  // Apple Pies
+                    itemid = 88;
+                    amount = gsRandom(1200, 2400);
+                }
+                case 1: {  // Zer Blades
+                    itemid = 324;
+                    amount = gsRandom(200, 400);
+                }
+                case 2: {  // Mithril Arrows
+                    itemid = 186;
+                    amount = gsRandom(1500, 2500);
+                }
+                case 3: {  // Elixer of Rejuvenation
+                    itemid = 52;
+                    amount = gsRandom(1500, 3000);
+                }
+            }
+            
+            shappendn(0, amount);
+            shappends(0, " ");
+            
+            // Get item name
+            shset(1, "obj");
+            shappendn(1, itemid);
+            gsGetSFlag(0, 1, 1);
+            shappendb(0, 1);
+            
+            gsInvAddItem(sktid, itemid, amount);
+        }
+        else {
+            // Gold reward (91.58% chance)
+            itemid = 13; // gold
+            
+            if(cit == 1) {
+                amount = gsRandom(3550, 4250);
+            }
+            else {
+                amount = gsRandom(900, 1300);
+            }
+            
+            shappendn(0, amount);
+            shappends(0, " gold");
+            
+            gsInvAddItem(sktid, itemid, amount);
+        }
+        
+        gsInvSend(sktid);
+        
+        // Complete message
+        shappends(0, ". You have ");
+        shappendn(0, points - 10);
+        shappends(0, " points remaining");
+        
+        if(rewardType == 1) {
+            shappends(0, " (Spell Focus)");
+        } else {
+            shappends(0, " (Item Focus)");
+        }
+        
+        gsStatusMessage(sktid, 0);
+    } else {
+        shset(0, "You don't have enough points for this special reward.");
+        gsStatusMessage(sktid, 0);
+    }
+}
+
+// Utility function to check if player is a citizen
+iscitizen(sktid) {
+    shset(0, "is_citizen");
+    if(gsGetFlag(sktid, 0) == 1) {
+        return 1;
+    }   
+    return 0;
+}
+
+// Utility functions for GM and moderator checks
+ism(sktid) {
+    shset(0, "is_moderator");
+    if(gsGetFlag(sktid, 0) == 1) {
+        return 1;
+    }   
+    return 0;
+}
+
+isgm(sktid) {
+    shset(0, "is_gm");
+    if(gsGetFlag(sktid, 0) == 1) {
+        return 1;
+    }   
+    return 0;
+}
+
+public converse(mapid, npcid, sktid, uidmsg) {
+    switch(uidmsg) {
+        case 0: {
+            gsConvBegin();
+            
+            // Main conversation logic
+            new points = getPoints(sktid);
+            shset(1, "Welcome! You have ");
+            shappendn(1, points);
+            shappends(1, " points.\n");
+            shappends(1, "Would you like to claim a reward?\n");
+            gsConvSetMessage(1);
+            
+            // Add conversation options (previous options)
+            shset(0, "Claim 1-point Reward");
+            gsConvAddOption(1, 0);
+            
+            if(points >= 10) {
+                shset(0, "Claim Spell Focus Reward (10 points)");
+                gsConvAddOption(2, 0);
+                
+                shset(0, "Claim Item Focus Reward (10 points)");
+                gsConvAddOption(3, 0);
+            }
+            
+            if(points >= 100) {
+                shset(0, "Spell Level Up Roll (100 points)");
+                gsConvAddOption(5, 0);
+            }
+            
+            shset(0, "Check my current points");
+            gsConvAddOption(4, 0);
+            
+            shset(0, "GM: Give 50 points");
+            gsConvAddOption(6, 0);
+            
+            shset(0, "Exit");
+            gsConvAddOption(-1, 0);
+            
+            gsConvEnd(npcid, mapid, sktid);
+        }
+        case 1: {
+            // 1-point reward
+            reward(sktid, 0);
+            
+            // Return to main menu
+            converse(mapid, npcid, sktid, 0);
+        }
+        case 2: {
+            // Spell Focus reward
+            focusReward(sktid, 1);
+            
+            // Return to main menu
+            converse(mapid, npcid, sktid, 0);
+        }
+        case 3: {
+            // Item Focus reward
+            focusReward(sktid, 2);
+            
+            // Return to main menu
+            converse(mapid, npcid, sktid, 0);
+        }
+        case 4: {
+            // Check points
+            gsConvBegin();
+            
+            new points = getPoints(sktid);
+            shset(1, "You currently have ");
+            shappendn(1, points);
+            shappends(1, " points.");
+            
+            gsConvSetMessage(1);
+            
+            shset(0, "Back");
+            gsConvAddOption(0, 0);
+            
+            gsConvEnd(npcid, mapid, sktid);
+        }
+        case 5: {
+            // Spell Level Up Roll
+            spellLevelUpReward(mapid, npcid, sktid);
+            return;
+        }
+        case 6: {
+            // GM: Add 50 points
+            addGMPoints(sktid);
+                
+            // Return to main menu
+            converse(mapid, npcid, sktid, 0);
+        }
+        case 7: {
+            // Accept Spell Upgrade
+            new pid = GetPermanentID(sktid);
+            
+            // Retrieve the spell ID
+            shset(0, SPELL_REROLL_FLAG);
+            shappendn(0, pid);
+            new spellId = gsGetFlag(0, 0);
+            
+            // Check current spell level and increase by 1
+            new currentLevel = gsGetSpellLevel(sktid, spellId);
+            gsSetSpellLevel(sktid, spellId, currentLevel + 1);
+            
+            // Inform player
+            shset(0, "Spell upgraded successfully!");
+            gsStatusMessage(sktid, 0);
+            
+            // Clear the temp flag
+            gsSetFlag(0, 0, 0);
+            
+            // Return to main menu
+            converse(mapid, npcid, sktid, 0);
+        }
+        case 8: {
+            // Reroll Spell (costs 50 points)
+            new pid = GetPermanentID(sktid);
+            new points = getPoints(sktid);
+            
+            if(points >= 50) {
+                // Deduct points
+                shset(0, POINTS_FLAG);
+                shappendn(0, pid);
+                gsSetFlag(0, 0, points - 50);
+                
+                // Define all possible spells (59 spells)
+                new spells[] = {
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 
+                    21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 
+                    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 
+                    57, 58, 59
+                };
+                
+                // Find a spell that can be upgraded
+                new spellId = 0;
+                new maxAttempts = sizeof(spells);
+                new attempts = 0;
+                
+                while(attempts < maxAttempts) {
+                    // Randomly select a spell initially
+                    new randomIndex = gsRandom(0, sizeof(spells) - 1);
+                    spellId = spells[randomIndex];
+                    
+                    // Get current spell level
+                    new currentLevel = gsGetSpellLevel(sktid, spellId);
+                    
+                    // If spell is below level 20, we can upgrade it
+                    if(currentLevel < 20) {
+                        break;  // Found a spell to upgrade
+                    }
+                    
+                    attempts++;
+                }
+                
+                // Check if all spells are maxed out
+                if(attempts >= maxAttempts) {
+                    shset(0, "All your spells are already at maximum level!");
+                    gsStatusMessage(sktid, 0);
+                    
+                    // Refund points
+                    shset(0, POINTS_FLAG);
+                    shappendn(0, pid);
+                    gsSetFlag(0, 0, points);
+                    
+                    // Return to previous spell selection
+                    spellLevelUpReward(mapid, npcid, sktid);
+                    return;
+                }
+                
+                // Store the new spell temporarily
+                shset(0, SPELL_REROLL_FLAG);
+                shappendn(0, pid);
+                gsSetFlag(0, 0, spellId);
+                
+                gsConvBegin();
+                
+                shset(0, "You have rerolled!");
+                gsConvSetMessage(0);
+                
+                // Spell details option
+                shset(0, "Upgrade ");
+                switch(spellId) {
+                    case 1: shappends(0, "Lesser Heal");
+                    case 2: shappends(0, "Greater Heal");
+                    case 3: shappends(0, "Poison Cloud");
+                    case 4: shappends(0, "Cure Poison");
+                    case 5: shappends(0, "Shield");
+                    case 6: shappends(0, "Holy Armor");
+                    case 7: shappends(0, "Empower");
+                    case 8: shappends(0, "Antimagic");
+                    case 9: shappends(0, "Earthquake");
+                    case 10: shappends(0, "Blizzard");
+                    case 11: shappends(0, "Burning Rain");
+                    case 12: shappends(0, "Meteor Storm");
+                    case 13: shappends(0, "Wraith");
+                    case 14: shappends(0, "Polymorph");
+                    case 15: shappends(0, "Cowardice");
+                    case 16: shappends(0, "Exorcism");
+                    case 17: shappends(0, "Magic Missile");
+                    case 18: shappends(0, "Fireball");
+                    case 19: shappends(0, "Flaming Arrow");
+                    case 20: shappends(0, "Icebolt");
+                    case 21: shappends(0, "Flame Strike");
+                    case 22: shappends(0, "Dark Touch");
+                    case 23: shappends(0, "Flash");
+                    case 24: shappends(0, "Medusa's Stare");
+                    case 25: shappends(0, "Lightning");
+                    case 26: shappends(0, "Nova");
+                    case 27: shappends(0, "Town Portal");
+                    case 28: shappends(0, "Ethereal Gate");
+                    case 29: shappends(0, "Holy Strike");
+                    case 30: shappends(0, "Curse");
+                    case 31: shappends(0, "Weaken");
+                    case 32: shappends(0, "Night Sight");
+                    case 33: shappends(0, "Chain Lightning");
+                    case 34: shappends(0, "Greed");
+                    case 35: shappends(0, "Death Darts");
+                    case 36: shappends(0, "Slow");
+                    case 37: shappends(0, "Banish");
+                    case 38: shappends(0, "Illusionary Menace");
+                    case 39: shappends(0, "Mind Blast");
+                    case 40: shappends(0, "Nature Shield");
+                    case 41: shappends(0, "True Seeing");
+                    case 42: shappends(0, "Summon Wolf");
+                    case 43: shappends(0, "Energy Bolt");
+                    case 44: shappends(0, "Holy Aura");
+                    case 45: shappends(0, "Raise Dead");
+                    case 46: shappends(0, "Summon Spiders");
+                    case 47: shappends(0, "Summon Slimes");
+                    case 48: shappends(0, "Teleport");
+                    case 49: shappends(0, "Charged Bolt");
+                    case 50: shappends(0, "Raindance");
+                    case 51: shappends(0, "Bless");
+                    case 52: shappends(0, "Nauseate");
+                    case 53: shappends(0, "Banshee's Wail");
+                    case 54: shappends(0, "Bestow Favor");
+                    case 55: shappends(0, "Fire Feet");
+                    case 56: shappends(0, "Fire Wall");
+                    case 57: shappends(0, "Dissipate");
+                    case 58: shappends(0, "Holy Fire");
+                    case 59: shappends(0, "Healing Wind");
+                    default: shappends(0, "Unknown Spell");
+                }
+                shappends(0, " from level ");
+                new currentLevel = gsGetSpellLevel(sktid, spellId);
+                shappendn(0, currentLevel);
+                shappends(0, " to level ");
+                shappendn(0, currentLevel + 1);
+                gsConvAddOption(7, 0);
+                
+                gsConvEnd(npcid, mapid, sktid);
+            } else {
+                shset(0, "You need 50 points to reroll.");
+                gsStatusMessage(sktid, 0);
+                
+                // Return to previous spell selection
+                spellLevelUpReward(mapid, npcid, sktid);
+            }
+        }
+        case -1: {
+            // Exit
+            return;
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

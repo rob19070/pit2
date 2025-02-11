@@ -1,0 +1,234 @@
+#include <faldon.inc>
+#include <stdlib.inc>
+
+#define SCRIPTNAME "particle_npc"
+
+// Forward declarations
+forward public spawn(npcidtag, mapid, npcid);
+forward public converse(MapID, NPCID, PlayerID, MSGID);
+forward public checkmeonce(sktid, mapid, x, y, z);
+forward public showParticle(sktid, particleType)
+
+// Particle type constants (using images 1-9)
+#define PARTICLE_HEALING 1
+#define PARTICLE_LIGHTNING 2
+#define PARTICLE_FROST 3
+#define PARTICLE_DARKNESS 4
+#define PARTICLE_NATURE 5
+#define PARTICLE_BLOOD 6
+#define PARTICLE_ARCANE 7
+#define PARTICLE_HOLY 8
+#define PARTICLE_CHAOS 9
+
+// Global variables to track active player particles
+new g_PlayerParticleActive[256] = {0, ...};
+new g_PlayerParticleType[256] = {0, ...};
+new g_PlayerParticleX[256] = {0, ...};
+new g_PlayerParticleY[256] = {0, ...};
+new g_PlayerParticleZ[256] = {0, ...};
+new g_PlayerParticleMap[256] = {0, ...};
+
+// Wrapper function to handle particle calls from other scripts
+public showParticle(sktid, particleType) {
+    // If no particle type is specified, use a default or random type
+    if(particleType == 0) {
+        particleType = gsRandom(1, 4);  // Random from all 9 particle types
+    }
+    
+    // Apply the particle effect
+    ApplyParticleEffect(sktid, particleType);
+    
+    // Return success
+    return 1;
+}
+
+// Spawn function
+public spawn(npcidtag, mapid, npcid) {
+    // No initial setup needed
+}
+
+// Main conversation handler
+public converse(MapID, NPCID, PlayerID, MSGID) {
+    switch(MSGID) {
+        case 0: InitConversation(MapID, NPCID, PlayerID);
+        case 1: ApplyParticleEffect(PlayerID, PARTICLE_HEALING);
+        case 2: ApplyParticleEffect(PlayerID, PARTICLE_LIGHTNING);
+        case 3: ApplyParticleEffect(PlayerID, PARTICLE_FROST);
+        case 4: ApplyParticleEffect(PlayerID, PARTICLE_DARKNESS);
+        case 5: ApplyParticleEffect(PlayerID, PARTICLE_NATURE);
+        case 6: ApplyParticleEffect(PlayerID, PARTICLE_BLOOD);
+        case 7: ApplyParticleEffect(PlayerID, PARTICLE_ARCANE);
+        case 8: ApplyParticleEffect(PlayerID, PARTICLE_HOLY);
+        case 9: ApplyParticleEffect(PlayerID, PARTICLE_CHAOS);
+        case 10: RemoveParticleEffect(PlayerID);
+    }
+}
+
+// Periodic check for particle repositioning
+public checkmeonce(sktid, mapid, x, y, z) {
+    // Check if particle is still active for this player
+    if(g_PlayerParticleActive[sktid]) {
+        new qx, qy, qz, qm;
+        
+        // Get current player coordinates
+        gsGetCoords(sktid, qx, qy, qz, qm);
+        
+        // Check if player has moved
+        if(qx != x || qy != y || qz != z || qm != mapid) {
+            // Remove old particle
+            gsParticle(g_PlayerParticleMap[sktid], 
+                       g_PlayerParticleX[sktid], 
+                       g_PlayerParticleY[sktid], 
+                       g_PlayerParticleZ[sktid], 
+                       g_PlayerParticleType[sktid], 10, 0, 0);
+            
+            // Apply new particle at current location
+            gsParticle(qm, qx, qy, qz, g_PlayerParticleType[sktid], 20, 32, 0);
+            
+            // Update tracked coordinates
+            g_PlayerParticleX[sktid] = qx;
+            g_PlayerParticleY[sktid] = qy;
+            g_PlayerParticleZ[sktid] = qz;
+            g_PlayerParticleMap[sktid] = qm;
+        }
+        
+        // Continue checking
+        gsTimer(0, 1, 5, sktid, mapid, x, y, z);
+    }
+}
+
+// Initialize conversation with particle options
+InitConversation(MapID, NPCID, PlayerID) {
+    gsConvBegin();
+    
+    // Conversation message
+    shset(0, "Behold! I can surround you with mystical particle effects. Choose your essence!");
+    gsConvSetMessage(0);
+    
+    // Particle effect options
+    shset(0, "Healing Aura (Image 1)");
+    gsConvAddOption(1, 0);
+    
+    shset(0, "Lightning Sparks (Image 2)");
+    gsConvAddOption(2, 0);
+    
+    shset(0, "Frost Mist (Image 3)");
+    gsConvAddOption(3, 0);
+    
+    shset(0, "Darkness Tendrils (Image 4)");
+    gsConvAddOption(4, 0);
+    
+    shset(0, "Nature Bloom (Image 5)");
+    gsConvAddOption(5, 0);
+    
+    shset(0, "Blood Essence (Image 6)");
+    gsConvAddOption(6, 0);
+    
+    shset(0, "Arcane Shimmer (Image 7)");
+    gsConvAddOption(7, 0);
+    
+    shset(0, "Holy Radiance (Image 8)");
+    gsConvAddOption(8, 0);
+    
+    shset(0, "Chaos Swirl (Image 9)");
+    gsConvAddOption(9, 0);
+    
+    shset(0, "Remove Particle Effect");
+    gsConvAddOption(10, 0);
+    
+    gsConvEnd(NPCID, MapID, PlayerID);
+}
+
+// Apply particle effect to the player
+ApplyParticleEffect(PlayerID, particleType) {
+    // Remove any existing particle effect first
+    RemoveParticleEffect(PlayerID);
+    
+    new x, y, z, map;
+    
+    // Get player's current coordinates
+    gsGetCoords(PlayerID, x, y, z, map);
+    
+    // Apply particle effect
+    gsParticle(map, x, y, z, particleType, 10000, 32, 0);
+    
+    // Track the active particle
+    g_PlayerParticleActive[PlayerID] = 1;
+    g_PlayerParticleType[PlayerID] = particleType;
+    g_PlayerParticleX[PlayerID] = x;
+    g_PlayerParticleY[PlayerID] = y;
+    g_PlayerParticleZ[PlayerID] = z;
+    g_PlayerParticleMap[PlayerID] = map;
+    
+    // Start periodic check for particle repositioning
+    gsTimer(0, 1, 5, PlayerID, map, x, y, z);
+    
+    // Choose message based on particle type
+    switch(particleType) {
+        case PARTICLE_HEALING: 
+            shset(0, "A soothing healing aura now surrounds you!");
+        case PARTICLE_LIGHTNING: 
+            shset(0, "Crackling lightning sparks dance around your form!");
+        case PARTICLE_FROST: 
+            shset(0, "A chilling frost mist envelops you!");
+        case PARTICLE_DARKNESS: 
+            shset(0, "Dark tendrils of shadow swirl about you!");
+        case PARTICLE_NATURE: 
+            shset(0, "Blooming nature essence twirls around you!");
+        case PARTICLE_BLOOD: 
+            shset(0, "A crimson blood essence pulses with your movements!");
+        case PARTICLE_ARCANE: 
+            shset(0, "Arcane shimmers ripple through the air around you!");
+        case PARTICLE_HOLY: 
+            shset(0, "A radiant holy light bathes you in its glow!");
+        case PARTICLE_CHAOS: 
+            shset(0, "Chaotic energies swirl in an unpredictable dance!");
+    }
+    
+    // Status message to confirm effect
+    gsStatusMessage(PlayerID, 0);
+}
+
+// Remove particle effect from the player
+RemoveParticleEffect(PlayerID) {
+    if(g_PlayerParticleActive[PlayerID]) {
+        // Clear the particle
+        gsParticle(g_PlayerParticleMap[PlayerID], 
+                   g_PlayerParticleX[PlayerID], 
+                   g_PlayerParticleY[PlayerID], 
+                   g_PlayerParticleZ[PlayerID], 
+                   g_PlayerParticleType[PlayerID], 10, 0, 0);
+        
+        // Reset tracking
+        g_PlayerParticleActive[PlayerID] = 0;
+        g_PlayerParticleType[PlayerID] = 0;
+        
+        shset(0, "Your mystical particle effect has been dispelled.");
+        gsStatusMessage(PlayerID, 0);
+    }
+}
+
+// Optional: Debug function to show script name
+scriptname(sktid) {
+    if(isgm(sktid)) {
+        shset(0, "Script: ");
+        shappends(0, SCRIPTNAME);
+        gsStatusMessage(sktid, 0);
+    }
+}
+
+// Helper function to check if the player is a GM
+isgm(sktid) {
+    shset(0, "is_gm");
+    return gsGetFlag(sktid, 0) == 1;
+}
+
+
+
+
+
+
+
+
+
+

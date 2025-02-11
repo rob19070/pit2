@@ -1,0 +1,266 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "pititem"
+
+// Forward declarations
+forward OnScriptInit();
+forward GetBurningPieces(plrid);
+forward GetDamageBonus(plrid, damageType);
+forward GetEquippedItem(plrid, slot[]);
+forward GetMithrilPieces(plrid);
+forward GetResistanceBonus(plrid, damageType);
+forward HasArcticSet(plrid);
+forward HasBloodSet(plrid);
+forward HasBowWeapon(plrid);
+forward HasBurningSet(plrid);
+forward HasGoldenSet(plrid);
+forward HasHolySet(plrid);
+forward HasLegendSet(plrid);
+forward HasLuckBracelet(plrid);
+forward HasMageWeapon(plrid);
+forward HasMasterBowSet(plrid);
+forward HasMasterMageSet(plrid);
+forward HasMasterSet(plrid);
+forward HasMithrilSet(plrid);
+forward HasSkullBlade(plrid);
+forward HasWeaponType(plrid, const weapons[], size);
+forward ModifyIncomingDamage(plrid, damage, damageType);
+forward ModifyOutgoingDamage(plrid, damage, damageType);
+forward ShouldRankUp(plrid);
+
+// Equipment Slots
+#define SLOT_WEAPON "weapon"
+#define SLOT_ARMOR "armor"
+#define SLOT_SHIELD "shield"
+#define SLOT_HELMET "helmet"
+#define SLOT_GAUNTLETS "gauntlets"
+#define SLOT_BOOTS "boots"
+#define SLOT_RING1 "ring1"
+#define SLOT_RING2 "ring2"
+#define SLOT_CAPE "cape"
+#define SLOT_GREAVES "greaves"
+#define SLOT_QUIVER "quiver"
+
+// Item IDs
+#define SKULL_BLADE 376
+#define MITHRIL_ROBE 350
+#define MITHRIL_MASK 421
+#define MITHRIL_GAUNTLETS 440
+#define MASTER_ROBE 16
+#define MASTER_SWORD 152
+#define HELM_OF_BURNING 259
+#define PLATE_OF_BURNING 258
+#define BOOTS_OF_BURNING 400
+#define HOLY_CAPE 126
+#define SHIELD_OF_HEAVEN 364
+#define HOLY_CAP 408
+#define ARCTIC_BOOTS 354
+#define ARCTIC_HAT 346
+#define GLOVES_OF_FROST 22
+#define BLOOD_CROWN 328
+#define BLOOD_ROBE 469
+#define CAPE_OF_LEGENDS 406
+#define GREAT_HELM 131
+#define GOLDEN_CROWN 393
+#define GOLDEN_ROBE 392
+#define BOOTS_OF_DARKNESS 356
+#define LUCK_BRACELET 439
+
+// Damage Types
+#define DAMAGE_PHYSICAL 0
+#define DAMAGE_LIGHTNING 1
+#define DAMAGE_FIRE 2
+#define DAMAGE_MAGIC 3
+#define DAMAGE_POISON 4
+#define DAMAGE_HOLY 5
+#define DAMAGE_PARALYSIS 6
+
+// Fixed weapon arrays
+new MAGE_WEAPONS[] = {
+    206, 207, 278, 352, 353, 365, 384, 445, 465, 471,
+    415, // SOUL_BLADE
+    264, // MAGEBANE
+    397  // SCEPTRE_OF_GATES
+};
+
+new BOW_WEAPONS[] = {
+    178, 214, 246, 247, 261, 431
+};
+
+// Entry point (required)
+public OnScriptInit() {
+    return 1;
+}
+
+// Core equipment checking
+public GetEquippedItem(plrid, slot[]) {
+    shset(0, "seleq_load");
+    shappends(0, slot);
+    gsGetFlag(plrid, 0);
+    shset(0, "seleq_item");
+    return gsGetFlag(0, 0);
+}
+
+public HasWeaponType(plrid, const weapons[], size) {
+    new equipped = GetEquippedItem(plrid, SLOT_WEAPON);
+    if(!equipped) return 0;
+    
+    for(new i = 0; i < size; i++) {
+        if(equipped == weapons[i]) return 1;
+    }
+    return 0;
+}
+
+public HasMageWeapon(plrid) {
+    return HasWeaponType(plrid, MAGE_WEAPONS, sizeof(MAGE_WEAPONS));
+}
+
+public HasBowWeapon(plrid) {
+    return HasWeaponType(plrid, BOW_WEAPONS, sizeof(BOW_WEAPONS));
+}
+
+public HasLuckBracelet(plrid) {
+    return GetEquippedItem(plrid, SLOT_GAUNTLETS) == LUCK_BRACELET;
+}
+
+// Set detection functions
+public HasBurningSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_HELMET) == HELM_OF_BURNING &&
+           GetEquippedItem(plrid, SLOT_ARMOR) == PLATE_OF_BURNING &&
+           GetEquippedItem(plrid, SLOT_BOOTS) == BOOTS_OF_BURNING;
+}
+
+public HasMithrilSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == MITHRIL_ROBE &&
+           GetEquippedItem(plrid, SLOT_HELMET) == MITHRIL_MASK &&
+           GetEquippedItem(plrid, SLOT_GAUNTLETS) == MITHRIL_GAUNTLETS;
+}
+
+public HasMasterSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == MASTER_ROBE &&
+           GetEquippedItem(plrid, SLOT_WEAPON) == MASTER_SWORD;
+}
+
+public HasMasterMageSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == MASTER_ROBE &&
+           HasMageWeapon(plrid);
+}
+
+public HasMasterBowSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == MASTER_ROBE &&
+           HasBowWeapon(plrid);
+}
+
+public HasHolySet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == HOLY_CAPE &&
+           GetEquippedItem(plrid, SLOT_SHIELD) == SHIELD_OF_HEAVEN &&
+           GetEquippedItem(plrid, SLOT_HELMET) == HOLY_CAP;
+}
+
+public HasArcticSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_BOOTS) == ARCTIC_BOOTS &&
+           GetEquippedItem(plrid, SLOT_HELMET) == ARCTIC_HAT &&
+           GetEquippedItem(plrid, SLOT_GAUNTLETS) == GLOVES_OF_FROST;
+}
+
+public HasBloodSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_HELMET) == BLOOD_CROWN &&
+           GetEquippedItem(plrid, SLOT_ARMOR) == BLOOD_ROBE &&
+           HasBowWeapon(plrid);
+}
+
+public HasLegendSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_ARMOR) == CAPE_OF_LEGENDS &&
+           GetEquippedItem(plrid, SLOT_HELMET) == GREAT_HELM &&
+           HasBowWeapon(plrid);
+}
+
+public HasGoldenSet(plrid) {
+    return GetEquippedItem(plrid, SLOT_HELMET) == GOLDEN_CROWN &&
+           GetEquippedItem(plrid, SLOT_ARMOR) == GOLDEN_ROBE &&
+           GetEquippedItem(plrid, SLOT_BOOTS) == BOOTS_OF_DARKNESS &&
+           GetEquippedItem(plrid, SLOT_GAUNTLETS) == LUCK_BRACELET;
+}
+
+public HasSkullBlade(plrid) {
+    return GetEquippedItem(plrid, SLOT_WEAPON) == SKULL_BLADE;
+}
+
+// Count functions
+public GetBurningPieces(plrid) {
+    new count = 0;
+    if(GetEquippedItem(plrid, SLOT_HELMET) == HELM_OF_BURNING) count++;
+    if(GetEquippedItem(plrid, SLOT_ARMOR) == PLATE_OF_BURNING) count++;
+    if(GetEquippedItem(plrid, SLOT_BOOTS) == BOOTS_OF_BURNING) count++;
+    return count;
+}
+
+public GetMithrilPieces(plrid) {
+    new count = 0;
+    if(GetEquippedItem(plrid, SLOT_ARMOR) == MITHRIL_ROBE) count++;
+    if(GetEquippedItem(plrid, SLOT_HELMET) == MITHRIL_MASK) count++;
+    if(GetEquippedItem(plrid, SLOT_GAUNTLETS) == MITHRIL_GAUNTLETS) count++;
+    return count;
+}
+
+// Bonus calculation functions
+public GetResistanceBonus(plrid, damageType) {
+    new bonus = 0;
+    
+    if(damageType == DAMAGE_FIRE) {
+        bonus += GetBurningPieces(plrid) * 10;  // 10% per piece
+        if(HasBloodSet(plrid)) bonus += 20;     // +20% fire resist
+    }
+    
+    if(damageType == DAMAGE_MAGIC) {
+        bonus += GetMithrilPieces(plrid) * 10;  // 10% per piece
+        if(HasArcticSet(plrid)) bonus += 5;     // +5% magic resist
+    }
+    
+    if(damageType == DAMAGE_PHYSICAL) {
+        if(HasMasterSet(plrid)) bonus += 10;    // +10% physical resist
+        if(HasMasterMageSet(plrid)) bonus += 15; // +15% physical resist
+    }
+    
+    // Global resistance bonuses
+    if(HasHolySet(plrid)) bonus += 10;         // +10% all resist
+    if(HasMasterBowSet(plrid)) bonus += 10;    // +10% all resist
+    if(HasGoldenSet(plrid)) bonus += 10;       // +10% all resist
+    
+    return bonus;
+}
+
+public GetDamageBonus(plrid, damageType) {
+    new bonus = 100;  // Base 100%
+    
+    if(HasSkullBlade(plrid)) bonus += 10;      // +10% damage
+    if(HasMasterSet(plrid)) bonus += 5;        // +5% damage
+    if(HasBloodSet(plrid)) bonus += 5;         // +5% damage
+    if(HasLegendSet(plrid)) bonus += 15;       // +15% damage
+    if(HasMasterBowSet(plrid)) bonus += 10;    // +10% damage
+    if(HasGoldenSet(plrid)) bonus += 10;       // +10% damage
+    
+    // Spell damage bonus
+    if(HasHolySet(plrid) && damageType != DAMAGE_PHYSICAL) {
+        bonus += 10;  // +10% spell damage
+    }
+    
+    return bonus;
+}
+
+public ModifyIncomingDamage(plrid, damage, damageType) {
+    new resistance = GetResistanceBonus(plrid, damageType);
+    if(resistance >= 100) return 0;  // Complete immunity
+    return (damage * (100 - resistance)) / 100;
+}
+
+public ModifyOutgoingDamage(plrid, damage, damageType) {
+    new bonus = GetDamageBonus(plrid, damageType);
+    return (damage * bonus) / 100;
+}
+
+public ShouldRankUp(plrid) {
+    if(!HasLuckBracelet(plrid)) return 0;
+    return gsRandom(1, 100) <= 15;  // 15% chance with just Luck Bracelet
+}

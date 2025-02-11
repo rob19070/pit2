@@ -1,0 +1,377 @@
+#include <stdlib.inc>
+#include <faldon.inc>
+
+#define SCRIPTNAME "spy10"
+#define QUESTDAY "#spy_team_day"
+#define DAYCOUNT "#spy_team_nr"
+#define DAYRESTRICT "spy_team_day_r"
+#define ACTIVE "^spy_team_active"
+#define LEADER "^spy_team_lead"
+#define JOIN "^spy_team"
+#define ENABLED "spy_team_on"
+#define TOTAL_RUNS "spy_runs_"
+#define MAX 255
+
+#define MAXTRIES 50
+#define ROLENONE 0
+#define ROLEMAGE 1
+#define ROLEWAR 2
+#define ROLEARCHER 3
+#define MX 287
+#define MY 173
+#define MAP 4
+#define TM 4
+#define TX 237
+#define TY 117
+#define DX 279
+#define DY 160
+
+forward public converse(mapid, npcid, sktid, uidmsg);
+forward public exec(mapid, x, y, z, gmlvl, sktid);
+
+GetPermanentID(sktid) {
+    shset(0, "pid");
+    return gsGetFlag(sktid, 0);
+}
+
+daycheck(sktid, add) {
+    shset(0, "faldon_day");
+    shset(1, QUESTDAY);
+    shset(2, DAYCOUNT);
+    
+    new fday = gsGetFlag(0, 0);
+    new qday = gsGetFlag(sktid, 1);
+    new dc = gsGetFlag(sktid, 2);
+    
+    if(fday == qday) {
+        if(dc < MAXTRIES) {
+            if(add == 1) {
+                gsSetFlag(sktid, 2, dc + 1);
+            }   
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    }
+    else {
+        gsSetFlag(sktid, 1, fday);
+        gsSetFlag(sktid, 2, add == 1 ? 1 : 0);
+        return 1;
+    }
+}
+
+isgm(sktid) {
+    shset(0, "is_gm");
+    return gsGetFlag(sktid, 0);
+}
+
+ism(sktid) {
+    shset(0, "is_moderator");
+    return gsGetFlag(sktid, 0);
+}
+
+scriptname(sktid) {
+    if(isgm(sktid)) {
+        shset(0, "Script: ");
+        shappends(0, SCRIPTNAME);
+        gsStatusMessage(sktid, 0);
+    }   
+}
+
+getRankName(outputSlot, runs) {
+    shset(outputSlot, "");
+    if(runs < 5) {
+        shappends(outputSlot, "Unranked");
+    }
+    else if(runs < 10) {
+        shappends(outputSlot, "Squire Initiate");
+    }
+    else if(runs < 20) {
+        shappends(outputSlot, "Apprentice Fighter");
+    }
+    else if(runs < 35) {
+        shappends(outputSlot, "Footman");
+    }
+    else if(runs < 60) {
+        shappends(outputSlot, "Man-at-Arms");
+    }
+    else if(runs < 90) {
+        shappends(outputSlot, "Sergeant");
+    }
+    else if(runs < 140) {
+        shappends(outputSlot, "Knight Errant");
+    }
+    else if(runs < 200) {
+        shappends(outputSlot, "Knight Defender");
+    }
+    else if(runs < 300) {
+        shappends(outputSlot, "Veteran Knight");
+    }
+    else if(runs < 450) {
+        shappends(outputSlot, "Master-at-Arms");
+    }
+    else if(runs < 650) {
+        shappends(outputSlot, "Champion Knight");
+    }
+    else if(runs < 950) {
+        shappends(outputSlot, "Lord Defender");
+    }
+    else if(runs < 1400) {
+        shappends(outputSlot, "Noble Champion");
+    }
+    else if(runs < 2000) {
+        shappends(outputSlot, "Royal Protector");
+    }
+    else if(runs < 3000) {
+        shappends(outputSlot, "Grand Champion");
+    }
+    else {
+        shappends(outputSlot, "Legendary Defender");
+    }
+}
+
+giveoptions(mapid, npcid, sktid) {
+    shset(0, ENABLED);
+    new e = gsGetFlag(0, 0);
+    
+    gsConvBegin();
+    
+    new pid = GetPermanentID(sktid);
+    shset(0, TOTAL_RUNS);
+    shappendn(0, pid);
+    new currentRuns = gsGetFlag(0, 0);
+    
+    shset(1, "Hey there, welcome to the kill pit.\n\n");
+    
+    shappends(1, "Rank: ");
+    getRankName(0, currentRuns);
+    shappendb(1, 0);
+    shappends(1, " (");
+    shappendn(1, currentRuns);
+    shappends(1, " runs)\n\n");
+    
+    // Add leaderboard display
+    shappends(1, "Top 10 Pit Killers:\n====================\n");
+    for(new i = 0; i < 10; i++) {
+        // Get player ID and runs from leaderboard data
+        shset(0, "leaderboard_pid_");
+        shappendn(0, i);
+        new leaderboardPid = gsGetFlag(0, 0);
+        
+        shset(0, "leaderboard_runs_");
+        shappendn(0, i);
+        new runs = gsGetFlag(0, 0);
+        
+        if(leaderboardPid > 0) {
+            shset(0, "pnm");
+            shappendn(0, leaderboardPid);
+            gsGetSFlag(0, 0, 2);
+            
+            shappends(1, "#");
+            shappendn(1, i + 1);
+            shappends(1, ". ");
+            shappendb(1, 2);
+            shappends(1, " (");
+            shappendn(1, runs);
+            shappends(1, " runs)\n");
+        }
+    }
+    
+    if(e == 0) {
+        shappends(1, "\nThis quest is currently closed, come back later.");
+    }
+    
+    gsConvSetMessage(1);
+    
+    if(e == 1) {
+        shset(0, "Can I join in?");
+        gsConvAddOption(1, 0);
+    }
+    
+    shset(0, "What is this place?");
+    gsConvAddOption(5, 0);
+    
+    shset(0, "I'll be going now.");
+    gsConvAddOption(6, 0);
+    
+    if(ism(sktid) == 1) {
+        shset(0, "GM/M: ");
+        shappends(0, e == 1 ? "Disable" : "Enable");
+        gsConvAddOption(99, 0);    
+    }
+    
+    if(isgm(sktid) == 1) {
+        shset(0, "GM: Reset");
+        gsConvAddOption(101, 0);
+    }
+    
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+joinoptions(mapid, npcid, sktid) {
+    gsConvBegin();
+    
+    if(anyinarea() == 0) {
+        shset(0, "level");
+        if(gsGetFlag(sktid, 0) >= 150 || ism(sktid) == 1) {
+            shset(0, DAYRESTRICT);
+            new dr = gsGetFlag(0, 0);
+            
+            if(daycheck(sktid, 0) == 1 || dr == 0) {
+                shset(0, "cur_pets");
+                if(gsGetFlag(sktid, 0) == 0) {
+                    shset(0, "What kind of role do you wish to have?");
+                    gsConvSetMessage(0);
+                    
+                    shset(0, "Mage");
+                    gsConvAddOption(2, 0);
+                
+                    shset(0, "Warrior");
+                    gsConvAddOption(3, 0);
+                
+                    shset(0, "Archer");
+                    gsConvAddOption(4, 0);
+                    
+                    shset(0, "Nevermind");
+                    gsConvAddOption(6, 0);
+                }
+                else {
+                    shset(0, "You're not allowed to take pets, please put your pets in the Zoo and come back.");
+                    gsConvSetMessage(0);
+                
+                    shset(0, "Okay!");
+                    gsConvAddOption(6, 0);
+                }
+            }
+            else {
+                shset(0, "You have already tried the kill pit ");
+                shappendn(0, MAXTRIES);
+                shappends(0, " times on that account this Faldon day, please come back tomorrow!");
+                gsConvSetMessage(0);
+            
+                shset(0, "Okay!");
+                gsConvAddOption(6, 0);
+            }
+        }
+        else {
+            shset(0, "You need to be atleast level 150 to join.");
+            gsConvSetMessage(0);
+            
+            shset(0, "Okay!");
+            gsConvAddOption(6, 0);
+        }
+    }
+    else {
+        shset(0, "Not at the moment, another team is still busy down there. Come back in a bit.");
+        gsConvSetMessage(0);
+        
+        shset(0, "Okay!");
+        gsConvAddOption(6, 0);
+    }
+    
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+explain(mapid, npcid, sktid) {
+    gsConvBegin();
+    shset(0, "This is the kill pit, we summon monsters in a zone for you and your team to kill. If you kill the monsters and live you will get a reward.");
+    gsConvSetMessage(0);
+    
+    shset(0, "I understand.");
+    gsConvAddOption(6, 0);
+
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+playerjoin(sktid, role) {
+    shset(0, DAYRESTRICT);
+    new dr = gsGetFlag(0, 0);
+
+    if((daycheck(sktid, 1) == 1 || dr == 0) && anyinarea() == 0) {
+        shset(0, JOIN);
+        gsSetFlag(sktid, 0, role);
+        
+        shset(0, LEADER);
+        gsSetFlag(sktid, 0, 0);
+        
+        shset(0, ACTIVE);
+        gsSetFlag(sktid, 0, 0);
+        
+        shset(0, "faldon_day");
+        shset(1, QUESTDAY);
+        gsSetFlag(sktid, 1, gsGetFlag(0, 0));
+    
+        gsSetCoords(sktid, MX, MY, 0, MAP);
+        
+        
+        shset(0, "To join the team talk to Larry, the first to talk to him will be assigned the Team Leader role. The Team Leader decides when the team goes in.");
+        gsTutorialBegin();
+        gsTutorialAdd(0);
+        gsTutorialEnd(sktid);
+    }
+}
+
+anyinarea() {
+    for(new i = 0; i < MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(isinarea(i) == 1) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+isinarea(sktid) {
+    new x,y,z,m;
+    gsGetCoords(sktid, x, y, z, m);
+
+    if(m == TM && x >= TX && x <= DX && y >= TY && y <= DY) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+public exec(mapid, x, y, z, gmlvl, sktid) {
+    return;
+}
+
+public converse(mapid, npcid, sktid, uidmsg) {
+    scriptname(sktid);
+
+    switch(uidmsg) {
+        case 0: giveoptions(mapid, npcid, sktid);
+        case 1: joinoptions(mapid, npcid, sktid);
+        case 2: playerjoin(sktid, ROLEMAGE);
+        case 3: playerjoin(sktid, ROLEWAR);
+        case 4: playerjoin(sktid, ROLEARCHER);
+        case 5: explain(mapid, npcid, sktid);
+        case 6: return;
+        case 99: {
+            if(ism(sktid) == 1) {
+                shset(0, ENABLED);
+                new e = gsGetFlag(0, 0);
+                gsSetFlag(0, 0, e == 1 ? 0 : 1);
+            }
+        }
+        case 101: {
+            if(isgm(sktid) == 1) {
+                shset(0, DAYCOUNT);
+                gsSetFlag(sktid, 0, 0);
+                
+                shset(0, LEADER);
+                gsSetFlag(sktid, 0, 0);
+                
+                shset(0, ACTIVE);
+                gsSetFlag(sktid, 0, 0);
+                
+                shset(0, "Everything has been reset for a new game.");
+                gsStatusMessage(sktid, 0);
+            }
+        }
+    }
+}
